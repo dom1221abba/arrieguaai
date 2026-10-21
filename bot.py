@@ -32,6 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     await update.message.reply_text(
         f"Fala, {user_name}! 🛡️ Sou o teu assistente especializado em Cibersegurança.\n\n"
+        "🟢 **[ATUALIZADO]** Sistema a operar com o modelo Gemini Flash e pronto a analisar vulnerabilidades!\n\n"
         "Podes mandar-me dúvidas sobre segurança da informação, análise de código, pentesting, redes ou vulnerabilidades!"
     )
 
@@ -44,7 +45,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Concatena a instrução de sistema com a mensagem do utilizador
         full_prompt = f"{SYSTEM_PROMPT}\n\nPergunta do utilizador: {user_message}"
         
-        # Utiliza o novo modelo gemini-3.8-flash indicado pela API
+        # Utiliza o modelo gemini-3.8-flash atualizado
         response = client.models.generate_content(
             model='gemini-3.8-flash',
             contents=full_prompt
