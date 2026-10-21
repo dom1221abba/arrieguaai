@@ -32,7 +32,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_name = update.effective_user.first_name
     await update.message.reply_text(
         f"Fala, {user_name}! 🛡️ Sou o teu assistente especializado em Cibersegurança.\n\n"
-        "🟢 **[ATUALIZADO]** Sistema a operar com o modelo Gemini Flash e pronto a analisar vulnerabilidades!\n\n"
+        "🟢 **[SISTEMA ONLINE]** ArrieguaIA pronto e protegido contra picos de tráfego!\n\n"
         "Podes mandar-me dúvidas sobre segurança da informação, análise de código, pentesting, redes ou vulnerabilidades!"
     )
 
@@ -42,19 +42,27 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         
-        # Concatena a instrução de sistema com a mensagem do utilizador
         full_prompt = f"{SYSTEM_PROMPT}\n\nPergunta do utilizador: {user_message}"
         
-        # Utiliza o modelo gemini-3.8-flash atualizado
-        response = client.models.generate_content(
-            model='gemini-3.8-flash',
-            contents=full_prompt
-        )
+        response = None
+        # Tenta o modelo principal mais recente
+        try:
+            response = client.models.generate_content(
+                model='gemini-3.8-flash',
+                contents=full_prompt
+            )
+        except Exception as primary_error:
+            logging.warning(f"Modelo principal sobrecarregado, a tentar fallback... Erro: {primary_error}")
+            # Fallback automático para o gemini-1.5-flash caso o principal dê 503
+            response = client.models.generate_content(
+                model='gemini-1.5-flash',
+                contents=full_prompt
+            )
         
         await update.message.reply_text(response.text)
     except Exception as e:
-        logging.error(f"Erro detalhado na API Gemini: {e}")
-        await update.message.reply_text(f"Erro ao consultar a IA: {e}")
+        logging.error(f"Erro crítico ao consultar a IA: {e}")
+        await update.message.reply_text("⚠️ Os servidores da IA estão temporariamente com pico de tráfego. Tenta enviar a mensagem novamente em instantes.")
 
 def main():
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
@@ -67,3 +75,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+    
