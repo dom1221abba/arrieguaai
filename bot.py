@@ -2,19 +2,25 @@ import os
 import logging
 from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 
-# Configuração de Logs para monitorização
+# Configuração de Logs
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-# Leitura das variáveis de ambiente
-TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Leitura e limpeza das variáveis de ambiente (remove espaços acidentais)
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN", "").strip()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "").strip()
 
-# Configuração da API do Gemini
-genai.configure(api_key=GEMINI_API_KEY)
+# Validação rápida das chaves
+if not TELEGRAM_TOKEN:
+    raise ValueError("ERRO: TELEGRAM_TOKEN não está definido nas variáveis de ambiente!")
+if not GEMINI_API_KEY:
+    raise ValueError("ERRO: GEMINI_API_KEY não está definido nas variáveis de ambiente!")
 
-# Instrução do Sistema (Persona estilo DeepHat / Especialista em Segurança)
+# Configuração da nova API do Gemini
+client = genai.Client(api_key=GEMINI_API_KEY)
+
 SYSTEM_PROMPT = """
 Você é o ArrieguaIA, um assistente avançado de inteligência artificial focado estritamente em Cibersegurança, 
 Pentesting (Ofensivo e Defensivo), Análise de Código Seguro, Engenharia Reversa, Redes e DevSecOps. 
@@ -23,14 +29,7 @@ corrigir códigos inseguros e debater técnicas de proteção e mitigação de r
 Responda sempre com precisão técnica, clareza e mantenha um tom profissional.
 """
 
-# Inicialização do modelo
-model = genai.GenerativeModel(
-    model_name="gemini-1.5-flash",
-    system_instruction=SYSTEM_PROMPT
-)
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Comando /start para boas-vindas."""
     user_name = update.effective_user.first_name
     await update.message.reply_text(
         f"Fala, {user_name}! 🛡️ Sou o teu assistente especializado em Cibersegurança.\n\n"
@@ -38,25 +37,27 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Processa todas as mensagens de texto usando o Gemini."""
     user_message = update.message.text
     
     try:
-        # Envia feedback visual no Telegram ("a digitar...")
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         
-        # Gera a resposta via Gemini API
-        response = model.generate_content(user_message)
+        # Chamada utilizando o novo client do Gemini 2.5 / Flash
+        response = client.models.generate_content(
+            model='gemini-2.5-flash',
+            contents=user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=SYSTEM_PROMPT,
+            ),
+        )
         await update.message.reply_text(response.text)
     except Exception as e:
         logging.error(f"Erro ao processar mensagem: {e}")
         await update.message.reply_text("Ocorreu um erro ao processar a tua consulta de segurança. Tenta novamente em instantes.")
 
 def main():
-    """Inicia o servidor do bot no Telegram."""
     app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-    # Registos dos handlers
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
 
