@@ -1,89 +1,67 @@
 import os
-import time
 import logging
-import requests
-import psycopg
-from dotenv import load_dotenv
+from telegram import Update
+from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
+import google.generativeai as genai
 
-load_dotenv()
+# Configuração de Logs para monitorização
+logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
-logging.basicConfig(level=logging.INFO)
+# Leitura das variáveis de ambiente
+TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-TOKEN = os.getenv("TELEGRAM_TOKEN")
-DATABASE_URL = os.getenv("DATABASE_URL")
+# Configuração da API do Gemini
+genai.configure(api_key=GEMINI_API_KEY)
 
-if not TOKEN or not DATABASE_URL:
-    raise ValueError("ERRO: TELEGRAM_TOKEN e DATABASE_URL precisam estar configurados!")
+# Instrução do Sistema (Persona estilo DeepHat / Especialista em Segurança)
+SYSTEM_PROMPT = """
+Você é o ArrieguaIA, um assistente avançado de inteligência artificial focado estritamente em Cibersegurança, 
+Pentesting (Ofensivo e Defensivo), Análise de Código Seguro, Engenharia Reversa, Redes e DevSecOps. 
+Seu objetivo é ajudar profissionais de segurança, estudantes e entusiastas a entender vulnerabilidades, 
+corrigir códigos inseguros e debater técnicas de proteção e mitigação de riscos. 
+Responda sempre com precisão técnica, clareza e mantenha um tom profissional.
+"""
 
-URL_API = f"https://api.telegram.org/bot{TOKEN}"
+# Inicialização do modelo
+model = genai.GenerativeModel(
+    model_name="gemini-1.5-flash",
+    system_instruction=SYSTEM_PROMPT
+)
 
-def init_db():
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Comando /start para boas-vindas."""
+    user_name = update.effective_user.first_name
+    await update.message.reply_text(
+        f"Fala, {user_name}! 🛡️ Sou o teu assistente especializado em Cibersegurança.\n\n"
+        "Podes mandar-me dúvidas sobre segurança da informação, análise de código, pentesting, redes ou vulnerabilidades!"
+    )
+
+async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Processa todas as mensagens de texto usando o Gemini."""
+    user_message = update.message.text
+    
     try:
-        with psycopg.connect(DATABASE_URL) as conn:
-            with conn.cursor() as cursor:
-                cursor.execute("""
-                    CREATE TABLE IF NOT EXISTS estatisticas (
-                        id SERIAL PRIMARY KEY,
-                        user_id BIGINT,
-                        contador INT DEFAULT 1
-                    );
-                """)
-                conn.commit()
-        logging.info("Banco de dados conectado e tabela verificada com sucesso!")
+        # Envia feedback visual no Telegram ("a digitar...")
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        
+        # Gera a resposta via Gemini API
+        response = model.generate_content(user_message)
+        await update.message.reply_text(response.text)
     except Exception as e:
-        logging.error(f"Erro ao conectar no banco de dados: {e}")
-
-def enviar_mensagem(chat_id, texto):
-    requests.post(f"{URL_API}/sendMessage", json={"chat_id": chat_id, "text": texto})
-
-def processar_mensagens(updates):
-    for update in updates:
-        if "message" in update:
-            msg = update["message"]
-            chat_id = msg["chat"]["id"]
-            user_id = msg["from"]["id"]
-            user_name = msg["from"].get("first_name", "Amigo")
-            texto = msg.get("text", "")
-
-            if texto == "/start":
-                enviar_mensagem(chat_id, f"Olá, {user_name}! O seu bot `@ArrieguaIA_bot` está rodando no Python 3.14 com Neon! 🚀")
-            else:
-                try:
-                    with psycopg.connect(DATABASE_URL) as conn:
-                        with conn.cursor() as cursor:
-                            cursor.execute("SELECT contador FROM estatisticas WHERE user_id = %s;", (user_id,))
-                            resultado = cursor.fetchone()
-                            
-                            if resultado:
-                                novo_contador = resultado[0] + 1
-                                cursor.execute("UPDATE estatisticas SET contador = %s WHERE user_id = %s;", (novo_contador, user_id))
-                            else:
-                                novo_contador = 1
-                                cursor.execute("INSERT INTO estatisticas (user_id, contador) VALUES (%s, %s);", (user_id, novo_contador))
-                                
-                            conn.commit()
-                    enviar_mensagem(chat_id, f"Mensagem recebida! Você já mandou {novo_contador} mensagem(ns).")
-                except Exception as e:
-                    logging.error(f"Erro no banco: {e}")
-                    enviar_mensagem(chat_id, "Ocorreu um erro ao salvar seus dados.")
+        logging.error(f"Erro ao processar mensagem: {e}")
+        await update.message.reply_text("Ocorreu um erro ao processar a tua consulta de segurança. Tenta novamente em instantes.")
 
 def main():
-    init_db()
-    offset = 0
-    logging.info("Bot leve iniciado e escutando mensagens...")
-    
-    while True:
-        try:
-            response = requests.get(f"{URL_API}/getUpdates", params={"offset": offset, "timeout": 30})
-            data = response.json()
-            
-            if data.get("ok"):
-                for update in data.get("result", []):
-                    offset = update["update_id"] + 1
-                    processar_mensagens([update])
-        except Exception as e:
-            logging.error(f"Erro na conexão com o Telegram: {e}")
-            time.sleep(5)
+    """Inicia o servidor do bot no Telegram."""
+    app = ApplicationBuilder().token(TELEGRAM_TOKEN).build()
 
-if __name__ == "__main__":
+    # Registos dos handlers
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & (~filters.COMMAND), handle_message))
+
+    print("Bot de Cibersegurança iniciado e a aguardar mensagens...")
+    app.run_polling()
+
+if __name__ == '__main__':
     main()
