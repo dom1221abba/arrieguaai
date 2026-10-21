@@ -5,7 +5,7 @@ from telegram import Update
 from telegram.ext import ApplicationBuilder, ContextTypes, CommandHandler, MessageHandler, filters
 from google import genai
 
-# Carrega as variáveis de ambiente locais do .env
+# Carrega as variáveis de ambiente locais do .env se existir
 load_dotenv()
 
 # Configuração de Logs
@@ -41,11 +41,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     try:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
         
-        # Chamada direta com a instrução do sistema concatenada
+        # Concatena a instrução de sistema com a mensagem do utilizador
         full_prompt = f"{SYSTEM_PROMPT}\n\nPergunta do utilizador: {user_message}"
         
+        # Utiliza o modelo gemini-2.0-flash atualizado
         response = client.models.generate_content(
-            model='gemini-1.5-flash',
+            model='gemini-2.0-flash',
             contents=full_prompt
         )
         
@@ -65,4 +66,3 @@ def main():
 
 if __name__ == '__main__':
     main()
-    
