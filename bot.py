@@ -44,9 +44,9 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Concatena a instrução de sistema com a mensagem do utilizador
         full_prompt = f"{SYSTEM_PROMPT}\n\nPergunta do utilizador: {user_message}"
         
-        # Utiliza o modelo gemini-2.0-flash atualizado
+        # Utiliza o novo modelo gemini-3.8-flash indicado pela API
         response = client.models.generate_content(
-            model='gemini-2.0-flash',
+            model='gemini-3.8-flash',
             contents=full_prompt
         )
         
